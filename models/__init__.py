@@ -3,4 +3,4 @@
 
 from . import pendulum
 
-__all__ = ["pendulum"]
+__all__ = ["pendulum", "integrators"]
