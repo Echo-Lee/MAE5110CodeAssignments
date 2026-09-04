@@ -3,4 +3,6 @@
 
 from . import compass_gait, inverted_pendulum_walker, pendulum, rimless_wheel
 
+from . import compass_gait, inverted_pendulum_walker, pendulum, rimless_wheel
+
 __all__ = ["compass_gait", "inverted_pendulum_walker", "pendulum", "rimless_wheel"]
