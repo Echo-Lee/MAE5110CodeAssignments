@@ -1,6 +1,8 @@
 # Assignment 1
 
-Goals:
+**Due date:** Wednesday, September 9th, 11:59PM (midnight)
+
+**Goals:**
 
 - get more comfortable with git;
 - analyze dynamics using mathematical and numerical tools; and
