@@ -9,24 +9,94 @@ import numpy as np
 
 
 def generate_params():
-    pass
+    params = {
+            "gravity": 9.81,  # gravity m/s^2)
+            "length": 1,  # rod length (m)
+            "pivot_height": 0.0, # the height for the contact point, used for calculating potential energy
+            "mass": 1,  # point mass at center (kg)
+            "angle_of_attack": np.pi / 8, # half angle between each leg
+            "ankle_torque": 0, # the torque that could be applied towards the pendulum
+            "incline": 0.06, # slope gamma
+        }
+    return params
 
 
 def dynamics(t, state, params):
-    # TODO: implement the state derivative.
-    return np.array([0.0, 0.0])
+    # Read the torque from params
+    gravity = params["gravity"]
+    length = params["length"]
+    mass = params["mass"]
+    tau = params["ankle_torque"]
+
+    angle = state[0]
+    angular_velocity = state[1]
+
+    angular_acceleration = (
+        mass * gravity * length * np.sin(angle)
+        + tau # the torque
+    ) / (mass * length**2)
+
+    state_derivative = np.array([angular_velocity, angular_acceleration])
+    return state_derivative
 
 
 def event_guard(previous_state, next_state, params):
-    pass
+    alpha = params["angle_of_attack"]
+    gamma = params["incline"]
+
+    previous_theta = previous_state[0]
+    next_theta = next_state[0]
+
+    forward_guard = gamma + alpha
+    backward_guard = gamma - alpha
+
+    crossed_forward = (
+        previous_theta < forward_guard
+        and next_theta >= forward_guard
+    )
+
+    crossed_backward = (
+        previous_theta > backward_guard
+        and next_theta <= backward_guard
+    )
+
+    return crossed_forward or crossed_backward
 
 
 def event_dynamics(state, params):
-    pass
+    alpha = params["angle_of_attack"]
+    gamma = params["incline"]
+
+    theta, angular_velocity = state[0], state[1]
+
+    new_state = state.copy()
+
+    if angular_velocity > 0:
+        # forward
+        new_state[0] = gamma - alpha
+    elif angular_velocity < 0:
+        # backward
+        new_state[0] = gamma + alpha
+
+    new_state[1] = angular_velocity * np.cos(2*alpha)
+
+    return new_state
 
 
 def calculate_energy(state, params):
-    pass
+    length = params["length"]
+    mass = params["mass"]
+    pivot_height = params["pivot_height"]
+    gravity = params["gravity"]
+
+    theta, angular_velocity = state[0], state[1]
+
+    kinetic_energy = .5 * mass * (angular_velocity * length) ** 2
+
+    # Y = l * cos(theta) + y_pivot
+    potential_energy = mass * gravity * (length * np.cos(theta) + pivot_height)
+
+    return potential_energy, kinetic_energy
 
 
 def visualize(

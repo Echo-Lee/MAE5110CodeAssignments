@@ -5,6 +5,7 @@ import numpy as np
 from matplotlib.animation import FuncAnimation, PillowWriter
 
 from models import inverted_pendulum_walker as model
+from integrators import rk4 as integrator
 
 # Fixed controls for this visualization example.
 params = {
@@ -12,7 +13,7 @@ params = {
     "length": 1.0,  # m
     "mass": 1.0,  # kg
     "incline": 0.06,  # rad
-    "angle_of_attack": np.pi / 8,  # rad
+    "angle_of_attack": np.pi / 7,  # rad
     "ankle_torque": 0.0,  # N m
 }
 
@@ -30,7 +31,7 @@ completed_steps = 0
 # Simulation loop. Replace this Euler step with your own integrator as needed.
 for step, t in enumerate(time_traj[:-1]):
     state = state_traj[:, step]
-    next_state = state + timestep * model.dynamics(t, state, params)
+    next_state = integrator(t, state, model.dynamics, timestep, params)
 
     if model.event_guard(state, next_state, params):
         next_state = model.event_dynamics(next_state, params)
