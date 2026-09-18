@@ -2,13 +2,25 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.animation import FuncAnimation, PillowWriter
-from matplotlib.patches import Patch
 
 from models import inverted_pendulum_walker as model
 from integrators import rk4 as integrator
 from controllers.ankle_controller import ankle_controller
 from analysis.standing_roa import is_in_standing_roa_trial, roa_event_guard
+from analysis.plotting import (
+    save_grid_resolution_plot,
+    save_policy_trajectory_plot,
+    save_standing_roa_plot,
+    save_steps_to_standstill_plot,
+)
+from analysis.policy_trajectory import simulate_planned_trajectory
+from analysis.return_map import (
+    action_plan,
+    build_lookup_table,
+    compute_lookup_errors,
+    compute_steps_to_roa,
+    longest_action_plan,
+)
 
 
 output = Path("output/assignment_2")
@@ -24,12 +36,18 @@ params = {
     "ankle_torque": 0.0,  # N m
 }
 
+def simulation_step(t, state, params, timestep):
+    next_state = integrator(t, state, model.dynamics, timestep, params)
+    impacted = False
 
-def run_one_simulation(initial_state, params, roa_data=None):
-    timestep = 1e-4
-    sim_time = 3.0
-    desired_number_of_steps = 3
+    if model.event_guard(state, next_state, params):
+        next_state = model.event_dynamics(next_state, params)
+        impacted = True
 
+    return next_state, impacted
+
+
+def run_one_simulation(initial_state, params, timestep=1e-4, sim_time=3.0, desired_number_of_steps=3, roa_data=None):
     n_timesteps = round(sim_time / timestep) + 1
     time_traj = np.arange(n_timesteps) * timestep
     state_traj = np.zeros((2, n_timesteps))
@@ -39,28 +57,18 @@ def run_one_simulation(initial_state, params, roa_data=None):
     torque_min = -0.1 * params["mass"] * params["gravity"] * params["length"]
     torque_max = 0.05 * params["mass"] * params["gravity"] * params["length"]
 
-    # Simulation loop. Replace this Euler step with your own integrator as needed.
+    # Simulation loop.
     for step, t in enumerate(time_traj[:-1]):
         state = state_traj[:, step]
         # calculate ankle torque
-        if roa_data is None:
-            # For parts of "standing RoA"
-            controller_on = True
-        else:
-            # If we have RoA map, and the state is in the map, then we turn on the controller
-            controller_on = roa_event_guard(state, roa_data)
+        # If we have RoA map, and the state is in the map, then we turn on the controller
+        controller_on = roa_event_guard(state, roa_data) if roa_data is not None else True
 
-        if controller_on:
-            torque = ankle_controller(state, params)
-            # enforce torque bounds
-            params["ankle_torque"] = np.clip(torque, torque_min, torque_max)
-        else:
-            params["ankle_torque"] = 0.0
+        # enforce torque bounds
+        params["ankle_torque"] = np.clip(ankle_controller(state, params), torque_min, torque_max) if controller_on else 0.0
 
-        next_state = integrator(t, state, model.dynamics, timestep, params)
-
-        if model.event_guard(state, next_state, params):
-            next_state = model.event_dynamics(next_state, params)
+        next_state, impacted = simulation_step(t, state, params, timestep)
+        if impacted:
             completed_steps += 1
 
         state_traj[:, step + 1] = next_state
@@ -86,46 +94,14 @@ for i, omega0 in enumerate(omega_values):
         roa_map[i, j] = is_in_standing_roa_trial(state_traj, completed_steps)
 
 
-plt.figure(figsize=(8, 6))
-
-mesh = plt.pcolormesh(
+save_standing_roa_plot(
     theta_values,
     omega_values,
     roa_map,
-    shading="auto"
-)
-
-plt.xlabel(r"$\theta_0$")
-plt.ylabel(r"$\dot{\theta}_0$")
-plt.title("Ankle Controller Region of Attraction")
-
-plt.plot(0, 0, "kx", label="Upright equilibrium")
-
-legend_elements = [
-    Patch(facecolor="yellow", label="Inside RoA"),
-    Patch(facecolor="purple", label="Outside RoA"),
-]
-
-handles, labels = plt.gca().get_legend_handles_labels()
-plt.legend(
-    handles=legend_elements + handles,
-    loc="upper right"
-)
-
-plt.savefig(
     output / "standing_roa.png",
-    dpi=300,
-    bbox_inches="tight"
-)
-
-plt.show()
-
-np.savez(
     output / "standing_roa_data.npz",
-    theta_values=theta_values,
-    omega_values=omega_values,
-    roa_map=roa_map
 )
+plt.show()
 
 
 data = np.load(
@@ -139,32 +115,140 @@ roa_data = {
 }
 
 
+# Choose theta = 0 as poincare, build look up table for different initial condition (theta_dot, alpha)
+
+def return_function(omega_k, alpha_k, params, timestep=1e-4, sim_time=3.0, roa_data=None):
+    # under initial poincare state, return the next omega when passing the vertical
+    # Initial condition of alpha_k, omega_k
+    params["angle_of_attack"] = alpha_k
+    params["ankle_torque"] = 0.0
+    state = np.array([0.0, omega_k])
+    n_timesteps = round(sim_time / timestep)
+
+    for step in range(n_timesteps):
+        t = step * timestep
+
+        if roa_data is not None and roa_event_guard(state, roa_data):
+            return None, True # omega_next, reached_RoA
+
+        next_state, _ = simulation_step(t, state, params, timestep)
+        if model.event_transverse_guard(state, next_state, params):
+            return next_state[1], False
+
+        state = next_state
+
+    return None, False
 
 
-# fig, ax = plt.subplots(figsize=(8, 5), layout="constrained")
+def evaluate_grid_resolution(n_omega_list, n_alpha, params, roa_data):
+    omega_min = 0.0
+    omega_max = np.sqrt(2 * params["gravity"] / params["length"])
+    omega_range = omega_max - omega_min
+
+    mean_error_percents = []
+    p95_error_percents = []
+
+    for n_omega in n_omega_list:
+        omega_values, alpha_values, next_omega_table, reach_roa_table = build_lookup_table(
+            n_omega, n_alpha, params, roa_data, return_function
+        )
+
+        errors = compute_lookup_errors(omega_values, next_omega_table)
+
+        mean_error = np.mean(errors)
+        p95_error = np.percentile(errors, 95)
+
+        mean_error_percent = mean_error / omega_range * 100
+        p95_error_percent = p95_error / omega_range * 100
+
+        mean_error_percents.append(mean_error_percent)
+        p95_error_percents.append(p95_error_percent)
+
+        print(f"n_omega={n_omega}: mean error={mean_error:.4f} rad/s ({mean_error_percent:.2f}%), 95th={p95_error:.4f} rad/s ({p95_error_percent:.2f}%)")
+
+    return np.array(mean_error_percents), np.array(p95_error_percents)
+
+n_omega_list = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+n_alpha = 20
+
+mean_error_percents, p95_error_percents = evaluate_grid_resolution(n_omega_list, n_alpha, params, roa_data)
+
+save_grid_resolution_plot(
+    n_omega_list,
+    mean_error_percents,
+    p95_error_percents,
+    output / "grid_resolution_test.png",
+)
+plt.show()
+
+# Use the best resolution to generate lookup table
+n_omega = 100
+n_alpha = 20
+
+omega_values, alpha_values, next_omega_table, reach_roa_table = build_lookup_table(
+    n_omega, n_alpha, params, roa_data, return_function
+)
+
+np.savez(
+    output / "poincare_lookup_table.npz",
+    omega_values=omega_values,
+    alpha_values=alpha_values,
+    next_omega_table=next_omega_table,
+    reach_roa_table=reach_roa_table,
+)
 
 
-# def draw_frame(index):
-#     # The massless swing leg is repositioned instantaneously at each impact.
-#     model.visualize(state_traj[:, index], params, ax=ax)
-#     ax.set_title(f"t = {time_traj[index]:.2f} s")
+# Compute the minimum steps neede to enter RoA for each omega
+steps_to_roa, fastest_action_by_state, next_state_index = compute_steps_to_roa(
+    omega_values, next_omega_table, reach_roa_table
+)
+# Find the starting point we need
+# This grid state gives distinct 3-step and 4-step plans, both of which
+# converge under a continuous-time verification run.
+initial_index = 87
+# calculate fastest plan
+fastest_plan = action_plan(
+    initial_index,
+    fastest_action_by_state,
+    next_state_index,
+    reach_roa_table,
+)
+# calculate longest plan
+longest_steps, longest_plan = longest_action_plan(
+    initial_index,
+    next_state_index,
+    next_omega_table,
+    reach_roa_table,
+)
 
+longest_steps = int(longest_steps + 1)
+initial_omega = omega_values[initial_index]
 
-# # Simulate at a small timestep, but render only 25 frames per second.
-# fps = 25
-# frame_stride = round(1 / (fps * timestep))
-# frame_indices = list(range(0, time_traj.size, frame_stride))
-# if frame_indices[-1] != time_traj.size - 1:
-#     frame_indices.append(time_traj.size - 1)
+# simulating the fastest and longest trajectories
+fastest_trajectory, fastest_crossings = simulate_planned_trajectory(
+    initial_omega,
+    alpha_values[fastest_plan],
+    params,
+    roa_data,
+)
 
-# animation = FuncAnimation(
-#     fig, draw_frame, frames=frame_indices, interval=1000 / fps, repeat=False
-# )
-# output = Path("output/assignment_2")
-# output.mkdir(parents=True, exist_ok=True)
-# animation.save(output / "walker.gif", writer=PillowWriter(fps=fps))
+longest_trajectory, longest_crossings = simulate_planned_trajectory(
+    initial_omega,
+    alpha_values[longest_plan],
+    params,
+    roa_data,
+)
 
-# # To save an MP4 instead, install FFmpeg and use:
-# # animation.save(output / "walker.mp4", writer="ffmpeg", fps=fps)
-# print(f"Saved {output / 'walker.gif'} ({completed_steps} footstrikes).")
-# plt.show()
+save_policy_trajectory_plot(
+    fastest_trajectory,
+    fastest_crossings,
+    longest_trajectory,
+    longest_crossings,
+    int(steps_to_roa[initial_index]),
+    longest_steps,
+    output / "three_step_trajectory.png",
+)
+
+save_steps_to_standstill_plot(
+    omega_values, steps_to_roa, initial_index, output / "steps_to_standstill.png"
+)
