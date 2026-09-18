@@ -57,6 +57,18 @@ def event_dynamics(state, params):
 
     return np.array([new_theta, new_angular_velocity])
 
+def event_transverse_guard(state, next_state, params):
+    theta = state[0]
+    next_theta = next_state[0]
+    next_omega = next_state[1]
+
+    return (
+        theta < 0.0
+        and next_theta >= 0.0
+        and next_omega > 0.0
+    )
+
+
 
 def calculate_energy(state, params):
     theta, angular_velocity = state
