@@ -9,11 +9,11 @@ from integrators import rk4 as integrator
 # Basic simulation of the bouncing ball
 
 params = {
-    "gravity": 9.81,  # gravity m/s^2)
-    "mass": 0.2,  # point mass (kg)
-    "damping_coeff": 0.0,  # damping coefficient (kg*m^2/s)
-    "torque": 0.0,  # torque (Nm)
-    "restitution_coeff": 1,  # coefficient of restitution (dimensionless)
+    "gravity": 9.81,
+    "mass": 0.2,
+    "damping_coeff": 0.0,
+    "torque": 0.0,
+    "restitution_coeff": 1,
 }
 
 
