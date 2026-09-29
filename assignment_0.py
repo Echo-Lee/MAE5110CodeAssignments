@@ -12,7 +12,9 @@ params = {
     "gravity": 9.81,  # gravity m/s^2)
     "mass": 0.2,  # point mass (kg)
     "damping_coeff": 0.0,  # damping coefficient (kg*m^2/s)
+
     "restitution_coeff": 1,  # coefficient of restitution (dimensionless)
+
 }
 
 
