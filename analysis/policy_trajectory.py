@@ -9,7 +9,7 @@ from models import inverted_pendulum_walker as model
 
 
 def _advance_state(time, state, params, timestep):
-    next_state = rk4(time, state, model.dynamics, timestep, params)
+    next_state = rk4(model.dynamics, time, state, timestep, params)
     if model.event_guard(state, next_state, params):
         return model.event_dynamics(next_state, params)
     return next_state

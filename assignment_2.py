@@ -37,7 +37,7 @@ params = {
 }
 
 def simulation_step(t, state, params, timestep):
-    next_state = integrator(t, state, model.dynamics, timestep, params)
+    next_state = integrator(model.dynamics, t, state, timestep, params)
     impacted = False
 
     if model.event_guard(state, next_state, params):

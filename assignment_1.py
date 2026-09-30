@@ -61,7 +61,7 @@ def simulate(initial_state, params, timestep=1e-5, sim_time=5.0):
     for step, t in enumerate(time_traj[:-1]):
 
         state_traj[:, step + 1] = integrator(
-            t, state_traj[:, step], model.dynamics, timestep, params
+            model.dynamics, t, state_traj[:, step], timestep, params
         )
 
         contact = model.detect_impact(

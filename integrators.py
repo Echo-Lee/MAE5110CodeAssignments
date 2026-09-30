@@ -1,9 +1,10 @@
-def explicit_euler(t, state, dynamics, timestep, params):
+# AI-assisted: reordered integrator arguments to (dynamics, t, state, timestep, params) to match the class interface and tests/test_integrators.py.
+def explicit_euler(dynamics, t, state, timestep, params):
     state_derivative = dynamics(t, state, params)
     next_state = state + timestep * state_derivative
     return next_state
 
-def rk4(t, state, dynamics, timestep, params):
+def rk4(dynamics, t, state, timestep, params):
     k1 = dynamics(t, state, params)
     k2 = dynamics(t + 0.5 * timestep, state + 0.5 * timestep * k1, params)
     k3 = dynamics(t + 0.5 * timestep, state + 0.5 * timestep * k2, params)
