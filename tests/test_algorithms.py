@@ -1,5 +1,5 @@
 """Small examples of Bellman updates and discretized dynamics."""
-
+## This is only a starter test
 import numpy as np
 import pytest
 
