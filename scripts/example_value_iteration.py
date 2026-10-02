@@ -1,9 +1,15 @@
-# Pendulum swing-up with value iteration
+# %% [markdown]
+# # Value Iteration Example
 #
-# From the repository root, run `uv run scripts/example_value_iteration.py`.
-# Build a transition matrix, solve for a torque policy, and simulate the
-# continuous pendulum using that policy.
+# This example uses value iteration to find a policy for the
+# pendulum. It discretizes the state and action spaces,
+# computes state transitions, and applies value iteration to
+# determine a policy.
+#
+# The resulting policy is then used to simulate the pendulum,
+# and the results are visualized.
 
+# %%
 # Imports
 from pathlib import Path
 
@@ -36,6 +42,12 @@ lower = points.min(axis=0)
 upper = points.max(axis=0)
 
 
+# %% [markdown]
+# ## Value Iteration
+# Build the transition matrix, define rewards, and compute
+# the value function and optimal policy.
+
+# %%
 # Build the transition matrix
 def step(state, torque):
     """Advance one control interval with constant torque, wrapping the angle."""
@@ -43,7 +55,11 @@ def step(state, torque):
     step_params["torque"] = torque
     for substep in range(control_steps):
         state = integrator(
-            model.dynamics, substep * timestep, state, timestep, step_params
+            model.dynamics,
+            substep * timestep,
+            state,
+            timestep,
+            step_params,
         )
     state[0] = (state[0] + np.pi) % (2 * np.pi) - np.pi
     return state
@@ -59,6 +75,12 @@ reward[upright] = 1.0  # the same state reward for every action
 
 value, policy = value_iteration(transition_matrix, reward, discount=discount)
 
+# %% [markdown]
+# ## Simulation
+# Simulate the pendulum starting from its initial state using
+# the policy calculated through value iteration.
+
+# %%
 # Simulate the policy on the continuous pendulum
 if np.any(initial_state < lower) or np.any(initial_state > upper):
     raise ValueError("Choose an initial state inside the grid domain.")
@@ -92,6 +114,12 @@ print(
     f"angular velocity: {state_traj[1, -1]:.4f} rad/s."
 )
 
+# %% [markdown]
+# ## Visualization
+# Plot the value function, optimal policy, trajectory,
+# and applied torque. Animate the pendulum motion.
+
+# %%
 # Plot the value, policy, and continuous trajectory
 output = Path("output/value_iteration")
 output.mkdir(parents=True, exist_ok=True)

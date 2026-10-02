@@ -29,6 +29,10 @@ def generate_params():
     }
     return params
 
+def generate_initial_condition():
+    """Return the initial angle and angular velocity."""
+    return np.array([0.0, 0.0])
+
 def detect_impact(state, params):
     # When theta > alpha + gamma, it is indicated that a spoke has contacted the slope
     angle, angular_velocity = state[0], state[1]

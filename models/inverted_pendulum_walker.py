@@ -7,6 +7,9 @@ of those functions; it draws a supplied state without advancing the simulation.
 import matplotlib.pyplot as plt
 import numpy as np
 
+def generate_initial_condition():
+    """Return the walker initially upright and at rest."""
+    return np.array([0.0, 0.0])
 
 def generate_params():
     return {
