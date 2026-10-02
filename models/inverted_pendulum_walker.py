@@ -18,7 +18,9 @@ def generate_params():
         "ankle_torque": 0.0,
     }
     
-
+def generate_initial_condition():
+    """Set an initial condition of (theta, angular_velocity) = (0.01, 0.01)"""
+    return np.array([0.01, 0.01])
 
 def dynamics(t, state, params):
     theta, angular_velocity = state
