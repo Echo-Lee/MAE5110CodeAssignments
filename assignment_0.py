@@ -13,6 +13,7 @@ params = {
     "mass": 0.2,  # point mass (kg)
     "damping_coeff": 0.0,  # damping coefficient (kg*m^2/s)
     "restitution_coeff": 1,  # coefficient of restitution (dimensionless)
+    "torque": 0.0,  # torque (Nm)
 }
 
 
@@ -32,7 +33,7 @@ state_traj[:, 0] = initial_state
 
 # t1 = timeit.default_timer()
 for step, t in enumerate(time_traj[:-1]):
-    state_traj[:, step + 1] = integrator(t, state_traj[:, step], timestep, params)
+    state_traj[:, step + 1] = integrator(model.dynamics, t, state_traj[:, step], timestep, params)
     
 # t2 = timeit.default_timer()
 # print(f"Timestep {timestep} took {t2 - t1:.6f} seconds")

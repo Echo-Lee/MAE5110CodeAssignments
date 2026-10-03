@@ -21,6 +21,11 @@ def generate_params():
     return params
 
 
+def generate_initial_condition():
+    # Start at upward vertical with forward velocity - (starts on poincare section)
+    return np.array([0.0, 1.0])
+
+
 def dynamics(t, state, params):
     # Read the torque from params
     gravity = params["gravity"]
